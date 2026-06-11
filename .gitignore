@@ -1,0 +1,66 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite / build outputs
+dist/
+build/
+.out/
+.vite/
+.cache/
+
+# Logs
+logs/
+*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+tmp/
+temp/
+
+# Optional npm cache
+.npm/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Coverage
+coverage/
+*.lcov
+
+# TypeScript
+*.tsbuildinfo
+
+# Tailwind/PostCSS cache
+.postcss-cache
+
+# JetBrains Rider / Visual Studio solution user options
+*.slnx.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Parcel cache
+.parcel-cache/
+
+# Optional: ignore local IDE run configs
+.run/
+
