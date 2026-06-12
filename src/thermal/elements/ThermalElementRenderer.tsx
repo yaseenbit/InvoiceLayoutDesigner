@@ -26,6 +26,7 @@ interface Props {
   receiptData: ThermalReceiptData;
   domRef?: (el: HTMLDivElement | null, id: string) => void;
   onSelect(id: string, multi: boolean): void;
+  onStartDrag?(e: React.MouseEvent, id: string, xMm: number, yMm: number): void;
   onStartResize?(handle: ThermalResizeHandle): void;
 }
 
@@ -201,6 +202,7 @@ export function ThermalElementRenderer({
   receiptData,
   domRef,
   onSelect,
+  onStartDrag,
   onStartResize,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -215,9 +217,12 @@ export function ThermalElementRenderer({
     if (!previewMode) onSelect(el.id, e.metaKey || e.ctrlKey || e.shiftKey);
   }, [previewMode, onSelect, el.id]);
 
-  const handleMouseDown = useCallback((e: MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-  }, []);
+    if (!previewMode && !el.locked) {
+      onStartDrag?.(e, el.id, el.xMm, el.yMm);
+    }
+  }, [previewMode, el, onStartDrag]);
 
   const handleResizeMouseDown = useCallback((
     e: MouseEvent,

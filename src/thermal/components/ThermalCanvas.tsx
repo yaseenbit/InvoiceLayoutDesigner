@@ -21,6 +21,7 @@ interface Props {
   onSelectElement(id: string, multi: boolean): void;
   onClearSelection(): void;
   onDrop(type: ThermalElementType, xMm: number, yMm: number): void;
+  onStartDrag?(e: React.MouseEvent, id: string, xMm: number, yMm: number): void;
   onStartResize?(handle: ThermalResizeHandle): void;
 }
 
@@ -40,6 +41,7 @@ export function ThermalCanvas({
   onSelectElement,
   onClearSelection,
   onDrop,
+  onStartDrag,
   onStartResize,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -123,6 +125,7 @@ export function ThermalCanvas({
           receiptData={receiptData}
           domRef={registerRef}
           onSelect={onSelectElement}
+          onStartDrag={onStartDrag}
           onStartResize={onStartResize}
         />
       ))}

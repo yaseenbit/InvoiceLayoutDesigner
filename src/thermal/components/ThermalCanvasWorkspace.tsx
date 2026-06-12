@@ -230,6 +230,7 @@ export function ThermalCanvasWorkspace() {
     ctx.updateElement(id, { xMm, yMm, widthMm, heightMm });
   }, [ctx]);
 
+  const startDrag = useThermalElementDrag(elementRefs, zoom, commitMove, page.snapToGrid, page.gridSizeMm);
   const startResize = useThermalElementResize(elementRefs, zoom, page.snapToGrid, page.gridSizeMm, commitResize);
 
   const handleDrop = useCallback((type: ThermalElementType, xMm: number, yMm: number) => {
@@ -275,6 +276,7 @@ export function ThermalCanvasWorkspace() {
           onSelectElement={handleSelectElement}
           onClearSelection={() => ctx.selectElements([])}
           onDrop={handleDrop}
+          onStartDrag={startDrag}
           onStartResize={startResize}
         />
       </div>
