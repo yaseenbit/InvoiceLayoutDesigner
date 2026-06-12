@@ -1,7 +1,14 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useThermal } from '../context/ThermalContext';
 import { ThermalTemplate } from '../types/thermal.types';
 import { openPrintPreview, downloadReceiptHtml } from '../services/ThermalHtmlRenderer';
+import {
+  downloadEscPosFile,
+  sendViaWebSerial,
+  sendViaWebUsb,
+  hexDump,
+  renderToEscPos,
+} from '../services/EscPosRenderer';
 import { SAMPLE_RECEIPT_DATA } from '../services/ThermalDataResolver';
 
 interface Props {
@@ -12,6 +19,9 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
   const ctx = useThermal();
   const { template, canUndo, canRedo, previewMode, zoom } = ctx;
   const importRef = useRef<HTMLInputElement>(null);
+  const [escPosMenu, setEscPosMenu] = useState(false);
+  const [hexModal, setHexModal] = useState<string | null>(null);
+  const [escPosStatus, setEscPosStatus] = useState<string | null>(null);
 
   const btnStyle = (active?: boolean): React.CSSProperties => ({
     display: 'flex',
@@ -64,6 +74,41 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
 
   const handleDownload = useCallback(() => {
     downloadReceiptHtml(template, SAMPLE_RECEIPT_DATA);
+  }, [template]);
+
+  const handleEscPosDownload = useCallback(() => {
+    downloadEscPosFile(template, SAMPLE_RECEIPT_DATA);
+    setEscPosMenu(false);
+  }, [template]);
+
+  const handleEscPosHexDump = useCallback(() => {
+    const bytes = renderToEscPos(template, SAMPLE_RECEIPT_DATA);
+    setHexModal(hexDump(bytes));
+    setEscPosMenu(false);
+  }, [template]);
+
+  const handleWebSerial = useCallback(async () => {
+    setEscPosMenu(false);
+    setEscPosStatus('Requesting serial port…');
+    try {
+      await sendViaWebSerial(template, SAMPLE_RECEIPT_DATA);
+      setEscPosStatus('Sent via Web Serial ✓');
+    } catch (e) {
+      setEscPosStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setTimeout(() => setEscPosStatus(null), 4000);
+  }, [template]);
+
+  const handleWebUsb = useCallback(async () => {
+    setEscPosMenu(false);
+    setEscPosStatus('Requesting USB device…');
+    try {
+      await sendViaWebUsb(template, SAMPLE_RECEIPT_DATA);
+      setEscPosStatus('Sent via WebUSB ✓');
+    } catch (e) {
+      setEscPosStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setTimeout(() => setEscPosStatus(null), 4000);
   }, [template]);
 
   const setZoom = (delta: number) => {
@@ -147,6 +192,127 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
       >
         🖨 Print
       </button>
+
+      {divider}
+
+      {/* ESC/POS */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setEscPosMenu((v) => !v)}
+          style={{ ...btnStyle(escPosMenu), background: escPosMenu ? '#f0fdfa' : '#fff' }}
+          title="ESC/POS raw output"
+        >
+          ⎙ ESC/POS ▾
+        </button>
+
+        {escPosMenu && (
+          <>
+            {/* click-outside overlay */}
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+              onClick={() => setEscPosMenu(false)}
+            />
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 4,
+              background: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              zIndex: 1000,
+              minWidth: 210,
+              overflow: 'hidden',
+            }}>
+              {[
+                { label: '⬇  Download .bin',     sub: 'Raw ESC/POS binary file',    fn: handleEscPosDownload },
+                { label: '🔍 Hex Dump',           sub: 'Inspect bytes in browser',    fn: handleEscPosHexDump  },
+                { label: '⚡  Send via Web Serial', sub: 'Chrome + serial cable/USB',  fn: handleWebSerial      },
+                { label: '🔌 Send via WebUSB',    sub: 'Chrome + USB-B cable',        fn: handleWebUsb         },
+              ].map(({ label, sub, fn }) => (
+                <button
+                  key={label}
+                  onClick={fn}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '9px 14px',
+                    textAlign: 'left',
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f0fdfa')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>{label}</div>
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{sub}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Status toast */}
+      {escPosStatus && (
+        <div style={{
+          position: 'fixed',
+          bottom: 36,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#0f172a',
+          color: '#fff',
+          padding: '8px 16px',
+          borderRadius: 6,
+          fontSize: 12,
+          zIndex: 9999,
+          pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        }}>
+          {escPosStatus}
+        </div>
+      )}
+
+      {/* Hex dump modal */}
+      {hexModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: 20, width: '70vw', maxHeight: '75vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#5eead4', fontFamily: 'monospace' }}>ESC/POS Hex Dump</span>
+              <button onClick={() => setHexModal(null)} style={{ border: 'none', background: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <pre style={{
+              flex: 1,
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: 11,
+              color: '#e2e8f0',
+              lineHeight: 1.6,
+              margin: 0,
+              padding: '8px 0',
+            }}>
+              {hexModal}
+            </pre>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleEscPosDownload}
+                style={{ fontSize: 11, padding: '5px 12px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+              >
+                ⬇ Download .bin
+              </button>
+              <button
+                onClick={() => { navigator.clipboard?.writeText(hexModal); }}
+                style={{ fontSize: 11, padding: '5px 12px', background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', borderRadius: 4, cursor: 'pointer' }}
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
