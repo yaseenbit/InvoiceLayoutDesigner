@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { useThermal } from '../context/ThermalContext';
 import { ThermalTemplate } from '../types/thermal.types';
 import { openPrintPreview, downloadReceiptHtml } from '../services/ThermalHtmlRenderer';
@@ -22,6 +22,9 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
   const [escPosMenu, setEscPosMenu] = useState(false);
   const [hexModal, setHexModal] = useState<string | null>(null);
   const [escPosStatus, setEscPosStatus] = useState<string | null>(null);
+  const [loadModal, setLoadModal] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<ThermalTemplate[]>([]);
+  const [saveFlash, setSaveFlash] = useState(false);
 
   const btnStyle = (active?: boolean): React.CSSProperties => ({
     display: 'flex',
@@ -76,6 +79,27 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
     downloadReceiptHtml(template, SAMPLE_RECEIPT_DATA);
   }, [template]);
 
+  const handleSave = useCallback(() => {
+    ctx.saveTemplate();
+    setSaveFlash(true);
+    setTimeout(() => setSaveFlash(false), 1500);
+  }, [ctx]);
+
+  const handleLoad = useCallback(() => {
+    setSavedTemplates(ctx.listSavedTemplates());
+    setLoadModal(true);
+  }, [ctx]);
+
+  const handleSelectSaved = useCallback((t: ThermalTemplate) => {
+    ctx.loadTemplate(t);
+    setLoadModal(false);
+  }, [ctx]);
+
+  const handleDeleteSaved = useCallback((id: string) => {
+    ctx.deleteSavedTemplate(id);
+    setSavedTemplates(ctx.listSavedTemplates());
+  }, [ctx]);
+
   const handleEscPosDownload = useCallback(() => {
     downloadEscPosFile(template, SAMPLE_RECEIPT_DATA);
     setEscPosMenu(false);
@@ -110,6 +134,14 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
     }
     setTimeout(() => setEscPosStatus(null), 4000);
   }, [template]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); handleSave(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleSave]);
 
   const setZoom = (delta: number) => {
     const next = Math.max(0.3, Math.min(3, zoom + delta));
@@ -152,6 +184,19 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
           maxWidth: 200,
         }}
       />
+
+      {divider}
+
+      {/* New / Save / Load */}
+      <button onClick={ctx.newTemplate} style={btnStyle()} title="New template">New</button>
+      <button
+        onClick={handleSave}
+        style={{ ...btnStyle(saveFlash), ...(saveFlash ? { background: '#f0fdfa', borderColor: '#0d9488', color: '#0f766e' } : {}) }}
+        title="Save to library (⌘S)"
+      >
+        {saveFlash ? '✓ Saved' : 'Save'}
+      </button>
+      <button onClick={handleLoad} style={btnStyle()} title="Load from library">Load</button>
 
       {divider}
 
@@ -273,6 +318,34 @@ export function ThermalTopToolbar({ onNavigateToA4 }: Props) {
           boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         }}>
           {escPosStatus}
+        </div>
+      )}
+
+      {/* Load modal */}
+      {loadModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 8, padding: 20, width: 420, maxHeight: '65vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Load Template</span>
+              <button onClick={() => setLoadModal(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: '#64748b', lineHeight: 1 }}>✕</button>
+            </div>
+            {savedTemplates.length === 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No saved templates yet.<br />Click Save to add the current template to the library.</div>
+            ) : (
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {savedTemplates.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 4px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{t.page.widthMm}mm · {t.elements.length} elements · {new Date(t.updatedAt).toLocaleString()}</div>
+                    </div>
+                    <button onClick={() => handleSelectSaved(t)} style={{ fontSize: 11, padding: '4px 10px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', flexShrink: 0 }}>Load</button>
+                    <button onClick={() => handleDeleteSaved(t.id)} style={{ fontSize: 11, padding: '4px 8px', background: 'none', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

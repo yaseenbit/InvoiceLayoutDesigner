@@ -4,6 +4,8 @@ import React, {
   useReducer,
   useCallback,
   useMemo,
+  useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,6 +16,11 @@ import {
   ThermalPaperMm,
 } from '../types/thermal.types';
 import { createThermalElement, duplicateThermalElement } from '../utils/thermalElementFactory';
+import {
+  saveActiveTemplate,
+  loadActiveTemplate,
+  thermalTemplateRepository,
+} from '../services/ThermalTemplateRepository';
 
 // ─── Default template ─────────────────────────────────────────────────────────
 
@@ -265,19 +272,33 @@ interface ThermalContextValue {
   setZoom(z: number): void;
   setClipboard(el: ThermalElement | null): void;
   dropElement(type: Parameters<typeof createThermalElement>[0], xMm: number, yMm: number): void;
+
+  // Persistence
+  newTemplate(): void;
+  saveTemplate(): void;
+  listSavedTemplates(): ThermalTemplate[];
+  deleteSavedTemplate(id: string): void;
 }
 
 const ThermalContext = createContext<ThermalContextValue | null>(null);
 
 export function ThermalProvider({ children }: { children: ReactNode }) {
-  const [histState, dispatch] = useReducer(thermalReducer, {
-    past: [],
-    present: createDefaultThermalTemplate(),
-    future: [],
-  });
+  const [histState, dispatch] = useReducer(thermalReducer, undefined, () => ({
+    past: [] as ThermalTemplate[],
+    present: loadActiveTemplate() ?? createDefaultThermalTemplate(),
+    future: [] as ThermalTemplate[],
+  }));
   const [ui, uiDispatch] = useReducer(uiReducer, DEFAULT_UI);
 
   const template = histState.present;
+
+  // Auto-save whenever template changes (debounced 500ms)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveActiveTemplate(template), 500);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [template]);
 
   const selectedElements = useMemo(
     () => template.elements.filter((el) => ui.selectedIds.includes(el.id)),
@@ -314,6 +335,21 @@ export function ThermalProvider({ children }: { children: ReactNode }) {
     uiDispatch({ type: 'SELECT', payload: [el.id] });
   }, [template.elements, template.page]);
 
+  const newTemplate = useCallback(() => {
+    dispatch({ type: 'LOAD_TEMPLATE', payload: createDefaultThermalTemplate() });
+    uiDispatch({ type: 'SELECT', payload: [] });
+  }, []);
+
+  const saveTemplate = useCallback(() => {
+    thermalTemplateRepository.save(template);
+  }, [template]);
+
+  const listSavedTemplates = useCallback(() => thermalTemplateRepository.list(), []);
+
+  const deleteSavedTemplate = useCallback((id: string) => {
+    thermalTemplateRepository.delete(id);
+  }, []);
+
   const value = useMemo<ThermalContextValue>(() => ({
     template,
     canUndo: histState.past.length > 0,
@@ -327,6 +363,7 @@ export function ThermalProvider({ children }: { children: ReactNode }) {
     addElement, updateElement, deleteElements, moveElements, duplicateElement,
     bringForward, sendBackward, bringToFront, sendToBack,
     selectElements, togglePreview, setZoom, setClipboard, dropElement,
+    newTemplate, saveTemplate, listSavedTemplates, deleteSavedTemplate,
   }), [
     template, histState.past.length, histState.future.length,
     ui.selectedIds, ui.zoom, ui.previewMode, ui.clipboard,
@@ -335,6 +372,7 @@ export function ThermalProvider({ children }: { children: ReactNode }) {
     addElement, updateElement, deleteElements, moveElements, duplicateElement,
     bringForward, sendBackward, bringToFront, sendToBack,
     selectElements, togglePreview, setZoom, setClipboard, dropElement,
+    newTemplate, saveTemplate, listSavedTemplates, deleteSavedTemplate,
   ]);
 
   return <ThermalContext.Provider value={value}>{children}</ThermalContext.Provider>;
